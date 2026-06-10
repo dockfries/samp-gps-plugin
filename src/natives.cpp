@@ -13,6 +13,21 @@
 #include "amx_handler.h"
 
 
+static std::string amx_GetCppString(AMX *amx, cell param)
+{
+	cell *addr = nullptr;
+	amx_GetAddr(amx, param, &addr);
+
+	int len = 0;
+	amx_StrLen(addr, &len);
+
+	std::string str(len, ' ');
+	amx_GetString(str.data(), addr, 0, len + 1);
+
+	return str;
+}
+
+
 namespace Natives
 {
 	std::mt19937 mersenne{ std::random_device{}() };

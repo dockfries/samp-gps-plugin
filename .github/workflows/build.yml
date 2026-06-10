@@ -2,68 +2,59 @@ name: Build
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - "*"
-      - "*/*"
-      - "**"
-  pull_request:
-    branches:
-      - "*"
-      - "*/*"
-      - "**"
 
 jobs:
-  build-windows-release:
-    runs-on: windows-2019
+  build-windows:
+    strategy:
+      matrix:
+        arch: [Win32, x64]
+        config: [Release]
+    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
-          clean: true
           submodules: recursive
-          fetch-depth: 0
 
-      - name: Install CMake
-        uses: lukka/get-cmake@v.3.23.2
-
-      - name: Generate and Build project
-        run: |
-          mkdir build
-          cd build
-          cmake -DCMAKE_BUILD_TYPE=Release .. -G "Visual Studio 16 2019" -A Win32
-          cmake --build . --config Release
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+      - uses: TheMrMilchmann/setup-msvc-dev@v4
         with:
-          name: samp-gps-win-release
-          path: build/Release/GPS.dll
-
-  build-linux-release:
-    runs-on: ubuntu-18.04
-    steps:
-      - uses: actions/checkout@v3
-        with:
-          clean: true
-          submodules: recursive
-          fetch-depth: 0
-
-      - name: Install packages
-        run: sudo apt-get install g++-multilib
-
-      - name: Install CMake
-        uses: lukka/get-cmake@v.3.23.2
+          arch: ${{ matrix.arch == 'x64' && 'amd64' || 'x86' }}
 
       - name: Generate build files
-        run: mkdir build && cd build && cmake .. -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_FLAGS=-m32 -DCMAKE_CXX_FLAGS=-m32
+        run: cmake -G Ninja -DCMAKE_BUILD_TYPE=${{ matrix.config }} -B build -S .
 
       - name: Build
-        run: |
-          cd build
-          cmake --build . --config Release
+        run: cmake --build build
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: samp-gps-linux-release
+          name: samp-gps-win-${{ matrix.arch }}-${{ matrix.config }}
+          path: build/GPS.dll
+
+  build-linux:
+    strategy:
+      matrix:
+        bit: [32, 64]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Install packages
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y cmake ninja-build g++-multilib libstdc++6:i386 libc6:i386
+
+      - name: Generate build files
+        run: cmake -B build -S . -DCMAKE_BUILD_TYPE=Release -DGPS_BUILD_32BIT=${{ matrix.bit == 32 && 'ON' || 'OFF' }}
+
+      - name: Build
+        run: cmake --build build
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: samp-gps-linux-${{ matrix.bit == 32 && 'i386' || 'x86_64' }}-Release
           path: build/GPS.so
